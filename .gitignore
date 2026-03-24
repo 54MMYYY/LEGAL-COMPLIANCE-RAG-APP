@@ -1,0 +1,6 @@
+﻿node_modules/
+**/node_modules/
+.venv/
+.env
+backend/data/
+backend/chroma_db/
