@@ -23,6 +23,16 @@ const App = () => {
   const chatEndRef = useRef(null);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
+  const textareaRef = useRef(null);
+
+  const adjustHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`; // Max height of 200px
+    }
+  };
+  
   const fetchFiles = async () => {
     try {
       const res = await axios.get('http://127.0.0.1:8000/files');
@@ -171,7 +181,7 @@ const App = () => {
         <div className="flex-1 overflow-y-auto p-8 space-y-6">
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-2xl p-4 rounded-2xl ${m.role === 'user' ? 'bg-blue-600 shadow-blue-900/20' : 'bg-slate-800 border border-slate-700 text-slate-200'}`}>
+              <div className={`max-w-[80%] p-4 rounded-2xl break-words overflow-hidden ${m.role === 'user' ? 'bg-blue-600 shadow-blue-900/20' : 'bg-slate-800 border border-slate-700 text-slate-200'}`}>
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
                 {m.sources && m.sources.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
@@ -189,9 +199,30 @@ const App = () => {
         </div>
 
         <div className="p-6 bg-slate-900 border-t border-slate-800">
-          <form onSubmit={handleSend} className="max-w-3xl mx-auto flex gap-4">
-            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Query your knowledge base..." className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-            <button type="submit" className="bg-blue-600 p-3 rounded-xl hover:bg-blue-500 transition-all"><Send size={20} /></button>
+          <form onSubmit={handleSend} className="max-w-3xl mx-auto flex items-end gap-4">
+            <textarea
+              ref={textareaRef}
+              rows="1"
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                adjustHeight();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend(e);
+                }
+              }}
+              placeholder="Query your knowledge base..."
+              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none max-h-[200px] overflow-y-auto transition-all"
+            />
+            <button 
+              type="submit" 
+              className="bg-blue-600 p-3 rounded-xl hover:bg-blue-500 transition-all shrink-0 h-[46px]"
+            >
+              <Send size={20} />
+            </button>
           </form>
         </div>
       </div>
