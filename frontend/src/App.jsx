@@ -1,20 +1,73 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, FileText, Activity, Database, Clock, ChevronRight } from 'lucide-react';
+import { Send, FileText, Activity, Database, Clock, Maximize2, Minimize2, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
+import DocumentVisualizer from './components/DocumentVisualizer';
+import { Worker, Viewer } from '@react-pdf-viewer/core';
+import '@react-pdf-viewer/core/lib/styles/index.css';
 
 const App = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({ latency: '0ms', sources: 0, cost: '$0.00' });
-  const [showStats, setShowStats] = useState(true);
-  const chatEndRef = useRef(null);
+  const [isVisualizerOpen, setIsVisualizerOpen] = useState(true);
+  const [activeIds, setActiveIds] = useState([]); 
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const fileInputRef = useRef(null);
+  
+  const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: '', page: 0, width: 600, key: 0 });
+  const isResizing = useRef(false);
 
-  // Auto-scroll to bottom of chat
+  const chatEndRef = useRef(null);
+  useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+
+  const fetchFiles = async () => {
+    try {
+      const res = await axios.get('http://127.0.0.1:8000/files');
+      setUploadedFiles(res.data);
+    } catch (e) { console.error("Fetch failed"); }
+  };
+  useEffect(() => { fetchFiles(); }, []);
+
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    const handleMouseMove = (e) => {
+      if (!isResizing.current) return;
+      const newWidth = window.innerWidth - e.clientX;
+      if (newWidth > 350 && newWidth < 900) setPdfViewer(prev => ({ ...prev, width: newWidth }));
+    };
+    const stopResizing = () => { isResizing.current = false; };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', stopResizing);
+    return () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', stopResizing); };
+  }, []);
+
+  const openPdfAtPage = (fileName, pageNum) => {
+    const url = `http://127.0.0.1:8000/files/${fileName}`;
+    setPdfViewer(prev => ({ ...prev, isOpen: true, url, page: pageNum - 1, key: Date.now() }));
+  };
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file || uploadedFiles.length >= 5) return;
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      await axios.post('http://127.0.0.1:8000/upload', formData);
+      fetchFiles();
+    } catch (error) { alert("Upload failed."); }
+    finally { setIsUploading(false); }
+  };
+
+  const deleteFile = async (filename) => {
+    try {
+      await axios.delete(`http://127.0.0.1:8000/delete/${filename}`);
+      fetchFiles();
+      if (pdfViewer.url.includes(filename)) setPdfViewer(p => ({ ...p, isOpen: false }));
+    } catch (e) { alert("Delete failed"); }
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -22,100 +75,72 @@ const App = () => {
 
     const userMessage = { role: 'user', content: input };
     setMessages(prev => [...prev, userMessage]);
+    const currentQuery = input;
     setInput('');
     setLoading(true);
 
     try {
-      // Replace with your actual Render/Railway backend URL
-      const response = await axios.post('http://127.0.0.1:8000/chat', { query: input });
-      
-      const botMessage = { 
-        role: 'assistant', 
-        content: response.data.answer,
-        sources: response.data.sources // Array of page numbers/quotes
-      };
-
-      setMessages(prev => [...prev, botMessage]);
-      setStats({
-        latency: response.data.latency, // e.g., "1.2s"
-        sources: response.data.sources.length,
-        cost: response.data.cost // e.g., "$0.004"
-      });
-    } catch (error) {
-      console.error("Error fetching AI response:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fileInputRef = useRef(null);
-  const [isUploading, setIsUploading] = useState(false);
-
-  const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      // Points to your Python FastAPI backend
-      const response = await axios.post('http://127.0.0.1:8000/upload', formData);
-      alert("File uploaded and indexed successfully!");
-    } catch (error) {
-      console.error("Upload error:", error);
-      alert("Failed to upload PDF. Is the backend running?");
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const triggerFileSelect = () => {
-    fileInputRef.current.click();
-  };
+    const res = await axios.post('http://127.0.0.1:8000/chat', { query: input });
+    
+    // This updates the 3D map highlights
+    setActiveIds(res.data.source_ids || []); 
+    
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: res.data.answer,
+      sources: res.data.metadata // Will be empty if generic, as requested
+    }]);
+    
+    setStats({
+      latency: res.data.latency,
+      sources: res.data.source_ids.length,
+      cost: "$0.00"
+    });
+  } catch (err) { /* handle error */ }
+};
 
   return (
-    <div className="flex h-screen w-screen bg-slate-900 text-white" style={{ display: 'flex', height: '100vh', width: '100vw' }}>
-      {/* SIDEBAR: File Upload & Project Info */}
-      <div className="w-80 bg-slate-950 border-r border-slate-800 p-6 flex flex-col">
-        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mb-8">
-          Production RAG v1.0
-        </h1>
+    <div className="flex h-screen w-screen bg-slate-900 text-white overflow-hidden font-sans">
+      <div className="w-80 bg-slate-950 border-r border-slate-800 p-6 flex flex-col shrink-0">
+        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mb-8">Production RAG v1.0</h1>
         
-        <div className="flex-1">
-          <label className="block text-sm font-medium text-slate-400 mb-2">Upload Knowledge Base</label>
-          
-          {/* HIDDEN FILE INPUT */}
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            onChange={handleFileUpload} 
-            className="hidden" 
-            accept=".pdf"
-          />
+        <div className="flex-1 flex flex-col min-h-0">
+          <label className="block text-sm font-medium text-slate-400 mb-2">Knowledge Base ({uploadedFiles.length}/5)</label>
+          <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf" />
+          <div onClick={() => uploadedFiles.length < 5 && fileInputRef.current.click()} className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer bg-slate-900/50 mb-4 ${isUploading ? 'border-emerald-500 opacity-50' : 'border-slate-800 hover:border-blue-500'} ${uploadedFiles.length >= 5 ? 'opacity-30' : ''}`}>
+            <FileText className={`mx-auto mb-2 ${isUploading ? 'animate-bounce text-emerald-400' : 'text-slate-500'}`} />
+            <span className="text-[10px] text-slate-500 uppercase tracking-wider">{isUploading ? 'Indexing...' : 'Add Document'}</span>
+          </div>
 
-          {/* INTERACTIVE DROPZONE */}
-          <div 
-            onClick={triggerFileSelect}
-            className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer bg-slate-900/50 ${
-              isUploading 
-                ? 'border-emerald-500/50 opacity-50 pointer-events-none' 
-                : 'border-slate-800 hover:border-blue-500'
-            }`}
-          >
-            <FileText className={`mx-auto mb-2 text-slate-500 ${isUploading ? 'animate-bounce text-emerald-400' : ''}`} />
-            <span className="text-xs text-slate-500 uppercase tracking-wider">
-              {isUploading ? 'Indexing PDF...' : 'Drop PDFs here'}
-            </span>
+          <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+            {uploadedFiles.map((fileObj) => (
+              <div key={fileObj.name} className="flex items-center justify-between bg-slate-900/50 p-2 rounded border border-slate-800 group">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {/* The Cluster Color Circle */}
+                  <div 
+                    className="w-3 h-3 rounded-full shrink-0 shadow-sm transition-transform hover:scale-125"
+                    style={{ backgroundColor: fileObj.color }}
+                    title={`Cluster Color: ${fileObj.color}`}/>
+                  
+                  <button 
+                    onClick={() => openPdfAtPage(fileObj.name, 1)} 
+                    className="text-[11px] truncate text-slate-400 hover:text-blue-400 text-left">
+                    {fileObj.name}
+                  </button>
+                </div>
+
+                <button 
+                  onClick={() => deleteFile(fileObj.name)} 
+                  className="text-slate-600 hover:text-red-500 ml-2">
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
           </div>
         </div>
 
-        {/* PROJECT 3: Observability Dashboard */}
-        <div className="bg-slate-900 rounded-xl p-4 border border-slate-800">
-          <div className="flex items-center gap-2 mb-3 text-emerald-400 text-sm font-semibold">
-            <Activity size={16} /> <span>System Metrics</span>
-          </div>
+        <div className="bg-slate-900 rounded-xl p-4 border border-slate-800 mt-4">
+          <div className="flex items-center gap-2 mb-3 text-emerald-400 text-sm font-semibold"><Activity size={16} /> <span>System Metrics</span></div>
           <div className="space-y-3">
             <Metric icon={<Clock size={14}/>} label="Latency" value={stats.latency} />
             <Metric icon={<Database size={14}/>} label="Retrieved Chunks" value={stats.sources} />
@@ -124,55 +149,78 @@ const App = () => {
         </div>
       </div>
 
-      {/* MAIN CHAT AREA */}
-      <div className="flex-1 flex flex-col relative">
+      <div className="flex-1 flex flex-col relative h-full overflow-hidden">
+        <div className={`transition-all duration-500 ${isVisualizerOpen ? 'h-[400px]' : 'h-12'} bg-slate-950 border-b border-slate-800 relative`}>
+            <div className="absolute top-3 left-6 z-20 flex items-center gap-4">
+                <span className="text-[10px] text-slate-500 font-mono tracking-widest uppercase">Knowledge Cluster Map</span>
+                <button 
+                    onClick={() => setIsVisualizerOpen(!isVisualizerOpen)} 
+                    className="hover:text-blue-400 transition-colors"
+                >
+                    {isVisualizerOpen ? <Minimize2 size={14}/> : <Maximize2 size={14}/>}
+                </button>
+            </div>
+            {isVisualizerOpen && (
+                <DocumentVisualizer 
+                    activeIds={activeIds} 
+                    onPointClick={openPdfAtPage} // This is the integration fix
+                />
+            )}
+        </div>
+
         <div className="flex-1 overflow-y-auto p-8 space-y-6">
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-2xl p-4 rounded-2xl ${
-                m.role === 'user' ? 'bg-blue-600' : 'bg-slate-800 border border-slate-700'
-              }`}>
-                <p className="text-sm leading-relaxed">{m.content}</p>
-                {m.sources && (
+              <div className={`max-w-2xl p-4 rounded-2xl ${m.role === 'user' ? 'bg-blue-600 shadow-blue-900/20' : 'bg-slate-800 border border-slate-700 text-slate-200'}`}>
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{m.content}</p>
+                {m.sources && m.sources.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
-                    {m.sources.map((s, idx) => (
-                      <span key={idx} className="text-[10px] bg-slate-700 px-2 py-1 rounded border border-slate-600 text-slate-300">
-                        Source: {s}
-                      </span>
+                    {m.sources.map((src, idx) => (
+                      <button key={idx} onClick={() => openPdfAtPage(src.source, src.page)} className="text-[10px] bg-blue-600/20 hover:bg-blue-600/40 px-2 py-1 rounded border border-blue-500/30 text-blue-300 transition-all flex items-center gap-1 shrink-0">
+                        <FileText size={10} /> <span>{src.source} (Pg {src.page})</span>
+                      </button>
                     ))}
                   </div>
                 )}
               </div>
             </div>
           ))}
-          {loading && <div className="text-slate-500 text-xs animate-pulse">AI is thinking...</div>}
           <div ref={chatEndRef} />
         </div>
 
-        {/* INPUT AREA */}
-        <div className="p-6 bg-slate-900/50 border-t border-slate-800">
+        <div className="p-6 bg-slate-900 border-t border-slate-800">
           <form onSubmit={handleSend} className="max-w-3xl mx-auto flex gap-4">
-            <input 
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask your documents anything..."
-              className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-            />
-            <button className="bg-blue-600 hover:bg-blue-500 p-3 rounded-xl transition-colors">
-              <Send size={20} />
-            </button>
+            <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Query your knowledge base..." className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <button type="submit" className="bg-blue-600 p-3 rounded-xl hover:bg-blue-500 transition-all"><Send size={20} /></button>
           </form>
         </div>
       </div>
+
+      <AnimatePresence>
+        {pdfViewer.isOpen && (
+          <motion.div initial={{ x: 600 }} animate={{ x: 0 }} exit={{ x: 600 }} style={{ width: pdfViewer.width }} className="h-full bg-slate-950 border-l border-slate-800 relative flex shrink-0">
+            <div onMouseDown={() => { isResizing.current = true; }} className="absolute left-0 top-0 w-1 h-full cursor-col-resize hover:bg-blue-500 z-50 transition-colors" />
+            <div className="flex-1 flex flex-col h-full overflow-hidden">
+              <div className="p-3 bg-slate-900 border-b border-slate-800 flex justify-between items-center shrink-0">
+                <span className="text-[10px] font-mono text-slate-400">PDF INSPECTOR</span>
+                <button onClick={() => setPdfViewer({ ...pdfViewer, isOpen: false })} className="text-slate-500 hover:text-white transition-colors"><Minimize2 size={16} /></button>
+              </div>
+              <div className="flex-1 bg-slate-800 overflow-hidden">
+                <Worker workerUrl="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js">
+                  <Viewer key={pdfViewer.key} fileUrl={pdfViewer.url} initialPage={pdfViewer.page} theme="dark" />
+                </Worker>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
 const Metric = ({ icon, label, value }) => (
   <div className="flex justify-between items-center text-xs">
-    <div className="flex items-center gap-2 text-slate-500">
-      {icon} <span>{label}</span>
-    </div>
+    <div className="flex items-center gap-2 text-slate-500">{icon} <span>{label}</span></div>
     <span className="font-mono text-slate-200">{value}</span>
   </div>
 );
