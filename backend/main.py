@@ -118,7 +118,7 @@ async def delete_file(filename: str):
             return {"status": "error", "message": "File not found on disk"}
 
         # Remove the document's vectors from ChromaDB to clean the 3D map
-        vectorstore.delete(where={"source": file_path})
+        vectorstore.delete(where={"source": filename})
         
         return {"status": "success", "message": f"Deleted {filename} and updated database"}
     
