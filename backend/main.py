@@ -7,8 +7,8 @@ import numpy as np
 from sklearn.decomposition import PCA
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
@@ -25,7 +25,10 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+embeddings = GoogleGenerativeAIEmbeddings(
+    model="models/embedding-001",
+    google_api_key=os.getenv("GOOGLE_API_KEY")
+)
 vectorstore = Chroma(persist_directory=PERSIST_DIR, embedding_function=embeddings)
 
 file_color_cache = {}
@@ -128,11 +131,10 @@ async def delete_file(filename: str):
 @app.post("/chat")
 async def chat_endpoint(request: dict):
     query = request.get("query")
-    search_query = query.replace("(", "").replace(")", "")
     try:
         # Retrieve context
-        results = vectorstore._collection.query(query_texts=[search_query, query], n_results=5, include=['documents', 'metadatas'])
-        context = "\n".join(results['documents'][0])
+        docs = vectorstore.similarity_search(query, k=5)
+        context = "\n".join([doc.page_content for doc in docs])
         
         client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
         MODEL_ID = 'gemini-2.5-flash-lite'
@@ -154,15 +156,18 @@ async def chat_endpoint(request: dict):
         # Deduplicate sources for the UI
         sources = []
         seen = set()
-        for m in results['metadatas'][0]:
-            src_key = f"{os.path.basename(m['source'])}_{m['page']}"
+        for doc in docs:
+            source_name = os.path.basename(doc.metadata.get('source', 'unknown'))
+            page_num = doc.metadata.get('page', 0)
+            src_key = f"{source_name}_{page_num}"
+            
             if src_key not in seen:
-                sources.append({"source": os.path.basename(m['source']), "page": m['page'] + 1})
+                sources.append({"source": source_name, "page": page_num + 1})
                 seen.add(src_key)
 
         return {
             "answer": ans_text,
-            "source_ids": results['ids'][0],
+            "source_ids": [doc.metadata.get('id', '') for doc in docs], # Mapping IDs from docs
             "metadata": sources,
             "latency": latency
         }
