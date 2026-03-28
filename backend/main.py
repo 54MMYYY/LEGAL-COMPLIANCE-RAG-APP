@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import time
@@ -22,6 +23,7 @@ app = FastAPI()
 DATA_DIR = "data"
 PERSIST_DIR = "./chroma_db"
 os.makedirs(DATA_DIR, exist_ok=True)
+os.makedirs(PERSIST_DIR, exist_ok=True)
 
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
@@ -35,7 +37,6 @@ file_color_cache = {}
 
 def get_consistent_color(filename):
     if filename not in file_color_cache:
-        # Avoid black/white by staying in the mid-range
         file_color_cache[filename] = "#{:06x}".format(random.randint(0x222222, 0xDDDDDD))
     return file_color_cache[filename]
 
@@ -45,6 +46,10 @@ def is_generic_response(text):
     no_info_phrases = ["does not contain", "no information", "i don't see", "not mentioned"]
     text_lower = text.lower()
     return any(p in text_lower for p in generic_phrases + no_info_phrases)
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/docs")
 
 @app.get("/clusters")
 async def get_clusters():
@@ -64,7 +69,7 @@ async def get_clusters():
             points.append({
                 "id": data['ids'][i],
                 "position": (coords_3d[i] * 10).tolist(),
-                "color": get_consistent_color(source_file), # Use the same helper
+                "color": get_consistent_color(source_file), 
                 "source": source_file,
                 "page": data['metadatas'][i].get('page', 0),
                 "text": data['documents'][i][:200]
@@ -87,12 +92,13 @@ async def upload_file(file: UploadFile = File(...)):
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
         chunks = text_splitter.split_documents(documents)
 
-        # Add to your Chroma database
+        # Adding to Chroma database
         vectorstore.add_documents(chunks)
         
         return {"message": "Upload successful", "filename": file.filename}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"UPLOAD ERROR: {e}") 
+        return {"error": str(e)}
 
 @app.get("/files")
 async def list_files():
@@ -120,7 +126,7 @@ async def delete_file(filename: str):
         else:
             return {"status": "error", "message": "File not found on disk"}
 
-        # Remove the document's vectors from ChromaDB to clean the 3D map
+        # Removing the document's vectors from ChromaDB to clean the 3D map
         vectorstore.delete(where={"source": filename})
         
         return {"status": "success", "message": f"Deleted {filename} and updated database"}

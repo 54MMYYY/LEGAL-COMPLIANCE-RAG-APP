@@ -35,7 +35,6 @@ const App = () => {
   useEffect(() => {
   const checkHealth = async () => {
     try {
-      // This uses the 'api' instance which correctly toggles between Local and Render
       await api.get('/health');
       setServerStatus('online');
     } catch (e) {
@@ -45,7 +44,7 @@ const App = () => {
   };
 
   checkHealth();
-  const timer = setInterval(checkHealth, 20000); // Check every 20s
+  const timer = setInterval(checkHealth, 20000);
   return () => clearInterval(timer);
 }, []);
 
@@ -53,7 +52,7 @@ const App = () => {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`; // Max height of 200px
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`; 
     }
   };
 
@@ -109,11 +108,9 @@ const App = () => {
 
   const currentQuery = input;
 
-  // 1. Clear the text state
   setMessages(prev => [...prev, { role: 'user', content: currentQuery }]);
   setInput(''); 
 
-  // 2. THE FIX: Reset the physical box height back to 1 line
   if (textareaRef.current) {
     textareaRef.current.style.height = 'auto';
   }
@@ -122,7 +119,17 @@ const App = () => {
 
   try {
     const res = await api.post('/chat', { query: currentQuery });
-    // ... rest of your logic (setActiveIds, setMessages, etc.)
+    setStats({
+      latency: res.data.latency,
+      sources: res.data.metadata.length,
+      cost: "$0.00" 
+    });
+    setMessages(prev => [...prev, { 
+      role: 'assistant', 
+      content: res.data.answer, 
+      sources: res.data.metadata 
+    }]);
+    setActiveIds(res.data.source_ids);
   } catch (err) {
     console.error("Chat error:", err);
   } finally {
@@ -204,7 +211,7 @@ const App = () => {
             {isVisualizerOpen && (
                 <DocumentVisualizer 
                     activeIds={activeIds} 
-                    onPointClick={openPdfAtPage} // This is the integration fix
+                    onPointClick={openPdfAtPage} 
                 />
             )}
         </div>
