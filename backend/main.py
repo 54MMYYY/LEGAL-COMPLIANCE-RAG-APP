@@ -51,45 +51,45 @@ def is_generic_response(text):
 async def root():
     return RedirectResponse(url="/docs")
 
+from sklearn.decomposition import PCA
+import numpy as np
+
 @app.get("/clusters")
 async def get_clusters():
     try:
-        # 1. Force a synchronization check with the DB
-        data = vectorstore._collection.get(include=['embeddings', 'documents', 'metadatas'], limit=10000)
+        data = vectorstore._collection.get(include=['embeddings', 'documents', 'metadatas'])
         
-        # 2. Check if we actually have data
         if not data or not data.get('embeddings') or len(data['embeddings']) == 0:
             return {"points": []}
 
-        # 3. Ensure embeddings are float arrays (Crucial for the new Gemini model)
-        vecs = np.array(data['embeddings'], dtype=np.float32)
+        raw_embeddings = data['embeddings']
+        vecs = np.array([np.array(e).flatten() for e in raw_embeddings], dtype=np.float32)
         
-        # 4. Handle 3D Projection math
         if vecs.shape[0] < 3:
-            # Create simple linear spread if not enough points for PCA
-            coords_3d = np.array([[float(i) * 2.0, float(i) * 1.0, 0.0] for i in range(vecs.shape[0])])
+            coords_3d = np.array([[float(i) * 5.0, float(i) * 2.0, 0.0] for i in range(vecs.shape[0])])
         else:
             pca = PCA(n_components=3)
             coords_3d = pca.fit_transform(vecs)
         
-        # 5. Build the point objects for the Three.js frontend
         points = []
         for i in range(len(coords_3d)):
-            metadata = data['metadatas'][i] if data['metadatas'] else {}
-            source_file = os.path.basename(metadata.get('source', 'unknown_doc'))
+            # Safely get metadata
+            meta = data['metadatas'][i] if data['metadatas'] and i < len(data['metadatas']) else {}
+            source_file = os.path.basename(meta.get('source', 'Unknown'))
             
             points.append({
                 "id": data['ids'][i],
-                "position": (coords_3d[i] * 15).tolist(), # Increased multiplier for better spread
+                "position": (coords_3d[i] * 12).tolist(), # 12x scale for better visual spacing
                 "color": get_consistent_color(source_file), 
                 "source": source_file,
-                "page": int(metadata.get('page', 0)),
+                "page": int(meta.get('page', 0)),
                 "text": data['documents'][i][:200] if data['documents'] else ""
             })
             
         return {"points": points}
+
     except Exception as e:
-        print(f"CLUSTER ERROR: {str(e)}") # This will show in Render logs
+        print(f"CLUSTER CRITICAL ERROR: {str(e)}")
         return {"points": [], "error": str(e)}
 
 @app.post("/upload")
