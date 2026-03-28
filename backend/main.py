@@ -60,37 +60,42 @@ async def get_clusters():
         data = vectorstore._collection.get(include=['embeddings', 'documents', 'metadatas'])
         
         if not data or not data.get('embeddings') or len(data['embeddings']) == 0:
+            print("CLUSTERS: No embeddings found in ChromaDB.")
             return {"points": []}
 
         raw_embeddings = data['embeddings']
         vecs = np.array([np.array(e).flatten() for e in raw_embeddings], dtype=np.float32)
         
         if vecs.shape[0] < 3:
-            coords_3d = np.array([[float(i) * 5.0, float(i) * 2.0, 0.0] for i in range(vecs.shape[0])])
+            coords_3d = np.array([[float(i) * 8.0, 0.0, float(i) * 4.0] for i in range(vecs.shape[0])])
         else:
             pca = PCA(n_components=3)
             coords_3d = pca.fit_transform(vecs)
         
         points = []
+        ids = data.get('ids', [f"id_{i}" for i in range(len(coords_3d))])
+        documents = data.get('documents', [""] * len(coords_3d))
+        metadatas = data.get('metadatas', [{}] * len(coords_3d))
+
         for i in range(len(coords_3d)):
-            # Safely get metadata
-            meta = data['metadatas'][i] if data['metadatas'] and i < len(data['metadatas']) else {}
-            source_file = os.path.basename(meta.get('source', 'Unknown'))
+            meta = metadatas[i] if metadatas[i] else {}
+            source_file = os.path.basename(str(meta.get('source', 'Unknown')))
             
             points.append({
-                "id": data['ids'][i],
-                "position": (coords_3d[i] * 12).tolist(), # 12x scale for better visual spacing
+                "id": ids[i],
+                "position": (coords_3d[i] * 15).tolist(), 
                 "color": get_consistent_color(source_file), 
                 "source": source_file,
-                "page": int(meta.get('page', 0)),
-                "text": data['documents'][i][:200] if data['documents'] else ""
+                "page": int(meta.get('page', 0)) + 1, 
+                "text": documents[i][:200] if documents[i] else ""
             })
             
+        print(f"CLUSTERS: Successfully generated {len(points)} points.")
         return {"points": points}
 
     except Exception as e:
         print(f"CLUSTER CRITICAL ERROR: {str(e)}")
-        return {"points": [], "error": str(e)}
+        return {"points": [], "error": f"Backend Math Error: {str(e)}"}
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
@@ -134,18 +139,20 @@ async def get_file(filename: str):
 async def delete_file(filename: str):
     try:
         file_path = os.path.join(DATA_DIR, filename)
-        
         if os.path.exists(file_path):
             os.remove(file_path)
-        else:
-            return {"status": "error", "message": "File not found on disk"}
 
-        # Removing the document's vectors from ChromaDB to clean the 3D map
-        vectorstore.delete(where={"source": filename})
+        # Force delete from Chroma using the metadata source tag
+        # We use the full path usually stored by PyPDFLoader
+        vectorstore.delete(where={"source": file_path})
         
-        return {"status": "success", "message": f"Deleted {filename} and updated database"}
-    
+        # Also clear the color cache for that file to keep RAM clean
+        if filename in file_color_cache:
+            del file_color_cache[filename]
+            
+        return {"status": "success", "message": f"Deleted {filename}"}
     except Exception as e:
+        print(f"DELETE ERROR: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/chat")
