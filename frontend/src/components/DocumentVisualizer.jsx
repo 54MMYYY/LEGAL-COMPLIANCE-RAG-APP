@@ -3,9 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Sphere, Html, Grid } from '@react-three/drei';
 import axios from 'axios';
 
-const API_BASE_URL = window.location.hostname === 'localhost' 
-  ? 'http://127.0.0.1:8000' 
-  : 'https://legal-compliance-rag-app.onrender.com';
+const API_BASE_URL = 'https://legal-compliance-rag-app.onrender.com';
 
 const api = axios.create({ baseURL: API_BASE_URL });
 
@@ -45,18 +43,18 @@ const DocumentVisualizer = ({ activeIds = [], onPointClick }) => {
   const [points, setPoints] = useState([]);
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await api.get('/clusters'); 
-        if (res.data && res.data.points) {
-          setPoints(res.data.points);
-        }
-      } catch (err) {
-        console.error("Connection Refused. Check if API_BASE_URL is correct:", err);
+  const fetchInitialClusters = async () => {
+    try {
+      const res = await api.get('/clusters');
+      if (res.data && res.data.points) {
+        setPoints(res.data.points);
       }
-    };
-    fetchData();
-  }, [activeIds]); 
+    } catch (err) {
+      console.error("Initial Fetch Error:", err);
+    }
+  };
+  fetchInitialClusters();
+}, []);
 
   return (
     <div className="w-full h-full bg-slate-950">
