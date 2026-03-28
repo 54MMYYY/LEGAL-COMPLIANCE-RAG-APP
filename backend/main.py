@@ -10,8 +10,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import random
+import time
 
 load_dotenv()
 app = FastAPI()
@@ -132,13 +134,16 @@ async def chat_endpoint(request: dict):
         results = vectorstore._collection.query(query_texts=[search_query, query], n_results=5, include=['documents', 'metadatas'])
         context = "\n".join(results['documents'][0])
         
-        genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
-        model = genai.GenerativeModel('gemini-2.5-flash-lite')
+        client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+        MODEL_ID = 'gemini-2.5-flash-lite'
         
         prompt = f"Context:\n{context}\n\nUser Question: {query}\nAnswer only based on context. If not found, say so."
         
         start_time = time.time()
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=MODEL_ID,
+            contents=prompt
+        )
         ans_text = response.text
         latency = f"{round((time.time() - start_time), 2)}s"
 
@@ -164,6 +169,16 @@ async def chat_endpoint(request: dict):
     except Exception as e:
         return {"answer": f"Backend Error: {str(e)}", "source_ids": [], "metadata": []}
 
+@app.get("/health")
+async def health_check():
+    """Endpoint for the frontend to check if the Render server is awake"""
+    return {
+        "status": "online", 
+        "timestamp": time.time(),
+        "region": "Dubai" 
+    }
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)

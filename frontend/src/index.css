@@ -16,3 +16,31 @@ html, body, #root {
   background-color: var(--color-slate-900);
   overflow: hidden; 
 }
+/* Custom Dark Blue Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  /* Darker than slate-950 for depth */
+  background: #020617; 
+}
+
+::-webkit-scrollbar-thumb {
+  /* A muted, dark blue-grey */
+  background: #1e293b; 
+  border-radius: 10px;
+  border: 2px solid #020617; /* Creates a padding effect */
+}
+
+::-webkit-scrollbar-thumb:hover {
+  /* Highlights slightly when you grab it */
+  background: #334155; 
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1e293b #020617;
+}

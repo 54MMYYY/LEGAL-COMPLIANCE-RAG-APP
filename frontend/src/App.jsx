@@ -6,6 +6,12 @@ import DocumentVisualizer from './components/DocumentVisualizer';
 import { Worker, Viewer } from '@react-pdf-viewer/core';
 import '@react-pdf-viewer/core/lib/styles/index.css';
 
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://127.0.0.1:8000' 
+  : 'https://legal-compliance-rag-app.onrender.com';
+
+const api = axios.create({ baseURL: API_BASE_URL });
+
 const App = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -16,6 +22,7 @@ const App = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const fileInputRef = useRef(null);
+  const [serverStatus, setServerStatus] = useState('connecting');
   
   const [pdfViewer, setPdfViewer] = useState({ isOpen: false, url: '', page: 0, width: 600, key: 0 });
   const isResizing = useRef(false);
@@ -25,6 +32,23 @@ const App = () => {
 
   const textareaRef = useRef(null);
 
+  useEffect(() => {
+  const checkHealth = async () => {
+    try {
+      // This uses the 'api' instance which correctly toggles between Local and Render
+      await api.get('/health');
+      setServerStatus('online');
+    } catch (e) {
+      setServerStatus('offline');
+      console.log("Server is still waking up...");
+    }
+  };
+
+  checkHealth();
+  const timer = setInterval(checkHealth, 20000); // Check every 20s
+  return () => clearInterval(timer);
+}, []);
+
   const adjustHeight = () => {
     const textarea = textareaRef.current;
     if (textarea) {
@@ -32,10 +56,10 @@ const App = () => {
       textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`; // Max height of 200px
     }
   };
-  
+
   const fetchFiles = async () => {
     try {
-      const res = await axios.get('http://127.0.0.1:8000/files');
+      const res = await api.get('/files');
       setUploadedFiles(res.data);
     } catch (e) { console.error("Fetch failed"); }
   };
@@ -54,7 +78,7 @@ const App = () => {
   }, []);
 
   const openPdfAtPage = (fileName, pageNum) => {
-    const url = `http://127.0.0.1:8000/files/${fileName}`;
+    const url = `${API_BASE_URL}/files/${fileName}`;
     setPdfViewer(prev => ({ ...prev, isOpen: true, url, page: pageNum - 1, key: Date.now() }));
   };
 
@@ -65,7 +89,7 @@ const App = () => {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      await axios.post('http://127.0.0.1:8000/upload', formData);
+      await api.post('/upload', formData);
       fetchFiles();
     } catch (error) { alert("Upload failed."); }
     finally { setIsUploading(false); }
@@ -73,47 +97,54 @@ const App = () => {
 
   const deleteFile = async (filename) => {
     try {
-      await axios.delete(`http://127.0.0.1:8000/delete/${filename}`);
+      await api.delete(`/delete/${filename}`);
       fetchFiles();
       if (pdfViewer.url.includes(filename)) setPdfViewer(p => ({ ...p, isOpen: false }));
     } catch (e) { alert("Delete failed"); }
   };
 
   const handleSend = async (e) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  if (e) e.preventDefault();
+  if (!input.trim()) return;
 
-    const userMessage = { role: 'user', content: input };
-    setMessages(prev => [...prev, userMessage]);
-    const currentQuery = input;
-    setInput('');
-    setLoading(true);
+  const currentQuery = input;
 
-    try {
-    const res = await axios.post('http://127.0.0.1:8000/chat', { query: input });
-    
-    // This updates the 3D map highlights
-    setActiveIds(res.data.source_ids || []); 
-    
-    setMessages(prev => [...prev, {
-      role: 'assistant',
-      content: res.data.answer,
-      sources: res.data.metadata // Will be empty if generic, as requested
-    }]);
-    
-    setStats({
-      latency: res.data.latency,
-      sources: res.data.source_ids.length,
-      cost: "$0.00"
-    });
-  } catch (err) { /* handle error */ }
+  // 1. Clear the text state
+  setMessages(prev => [...prev, { role: 'user', content: currentQuery }]);
+  setInput(''); 
+
+  // 2. THE FIX: Reset the physical box height back to 1 line
+  if (textareaRef.current) {
+    textareaRef.current.style.height = 'auto';
+  }
+
+  setLoading(true);
+
+  try {
+    const res = await api.post('/chat', { query: currentQuery });
+    // ... rest of your logic (setActiveIds, setMessages, etc.)
+  } catch (err) {
+    console.error("Chat error:", err);
+  } finally {
+    setLoading(false);
+  }
 };
 
   return (
     <div className="flex h-screen w-screen bg-slate-900 text-white overflow-hidden font-sans">
+      {/* SIDEBAR */}
       <div className="w-80 bg-slate-950 border-r border-slate-800 p-6 flex flex-col shrink-0">
         <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mb-8">Production RAG v1.0</h1>
-        
+        <div className="flex items-center gap-2 mb-8 px-1">
+          <div className={`w-2 h-2 rounded-full transition-all duration-500 ${
+            serverStatus === 'online' 
+              ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' 
+              : 'bg-red-500 shadow-[0_0_8px_#ef4444]'
+          }`} />
+          <span className="text-[10px] text-slate-500 uppercase font-mono tracking-wider">
+            System: {serverStatus}
+          </span>
+        </div>
         <div className="flex-1 flex flex-col min-h-0">
           <label className="block text-sm font-medium text-slate-400 mb-2">Knowledge Base ({uploadedFiles.length}/5)</label>
           <input type="file" ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf" />
