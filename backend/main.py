@@ -59,12 +59,15 @@ async def get_clusters():
     try:
         data = vectorstore._collection.get(include=['embeddings', 'documents', 'metadatas'])
         
-        if not data or not data.get('embeddings') or len(data['embeddings']) == 0:
+        if data is None:
+            return {"points": []}
+            
+        embeddings_list = data.get('embeddings')
+        if embeddings_list is None or len(embeddings_list) == 0:
             print("CLUSTERS: No embeddings found in ChromaDB.")
             return {"points": []}
 
-        raw_embeddings = data['embeddings']
-        vecs = np.array([np.array(e).flatten() for e in raw_embeddings], dtype=np.float32)
+        vecs = np.array([np.array(e).flatten() for e in embeddings_list], dtype=np.float32)
         
         if vecs.shape[0] < 3:
             coords_3d = np.array([[float(i) * 8.0, 0.0, float(i) * 4.0] for i in range(vecs.shape[0])])
@@ -73,21 +76,22 @@ async def get_clusters():
             coords_3d = pca.fit_transform(vecs)
         
         points = []
-        ids = data.get('ids', [f"id_{i}" for i in range(len(coords_3d))])
-        documents = data.get('documents', [""] * len(coords_3d))
-        metadatas = data.get('metadatas', [{}] * len(coords_3d))
+        ids = data.get('ids', [])
+        documents = data.get('documents', [])
+        metadatas = data.get('metadatas', [])
 
         for i in range(len(coords_3d)):
-            meta = metadatas[i] if metadatas[i] else {}
-            source_file = os.path.basename(str(meta.get('source', 'Unknown')))
+            meta = metadatas[i] if (metadatas and i < len(metadatas)) else {}
+            source_path = str(meta.get('source', 'Unknown'))
+            source_file = os.path.basename(source_path)
             
             points.append({
-                "id": ids[i],
+                "id": ids[i] if (ids and i < len(ids)) else f"id_{i}",
                 "position": (coords_3d[i] * 15).tolist(), 
                 "color": get_consistent_color(source_file), 
                 "source": source_file,
                 "page": int(meta.get('page', 0)) + 1, 
-                "text": documents[i][:200] if documents[i] else ""
+                "text": documents[i][:200] if (documents and i < len(documents)) else ""
             })
             
         print(f"CLUSTERS: Successfully generated {len(points)} points.")
