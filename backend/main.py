@@ -28,7 +28,7 @@ os.makedirs(PERSIST_DIR, exist_ok=True)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/embedding-001",
+    model="models/gemini-embedding-001",
     google_api_key=os.getenv("GOOGLE_API_KEY")
 )
 vectorstore = Chroma(persist_directory=PERSIST_DIR, embedding_function=embeddings)
