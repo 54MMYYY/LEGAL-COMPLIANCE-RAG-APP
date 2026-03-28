@@ -57,14 +57,17 @@ import numpy as np
 @app.get("/clusters")
 async def get_clusters():
     try:
-        data = vectorstore._collection.get(include=['embeddings', 'documents', 'metadatas'])
-        
-        if data is None or 'embeddings' not in data or not data['embeddings']:
+        data = vectorstore._collection.get(
+            include=['embeddings', 'documents', 'metadatas']
+        )
+
+        embeddings_list = data.get('embeddings', None)
+
+        if embeddings_list is None or len(embeddings_list) == 0:
             return {"points": []}
 
-        embeddings_list = data['embeddings']
         vecs = np.array([np.array(e).flatten() for e in embeddings_list], dtype=np.float32)
-        
+
         n_samples = vecs.shape[0]
 
         if n_samples >= 3:
@@ -72,28 +75,29 @@ async def get_clusters():
             coords_3d = pca.fit_transform(vecs)
         else:
             coords_3d = np.array([
-                [float(i) * 10.0, 5.0, float(i) * 5.0] 
+                [i * 10.0, 5.0, i * 5.0]
                 for i in range(n_samples)
-            ])
-        
+            ], dtype=np.float32)
+
         points = []
         ids = data.get('ids', [])
         documents = data.get('documents', [])
         metadatas = data.get('metadatas', [])
 
         for i in range(n_samples):
-            meta = metadatas[i] if (metadatas and i < len(metadatas)) else {}
+            meta = metadatas[i] if i < len(metadatas) else {}
+
             source_file = os.path.basename(str(meta.get('source', 'Unknown')))
-            
+
             points.append({
                 "id": ids[i] if i < len(ids) else f"id_{i}",
-                "position": (coords_3d[i] * 15).tolist(), 
-                "color": get_consistent_color(source_file), 
+                "position": coords_3d[i].tolist(),
+                "color": get_consistent_color(source_file),
                 "source": source_file,
-                "page": int(meta.get('page', 0)) + 1, 
-                "text": documents[i][:200] if (documents and i < len(documents)) else ""
+                "page": int(meta.get('page', 0)),
+                "text": documents[i][:200] if i < len(documents) else ""
             })
-            
+
         return {"points": points}
 
     except Exception as e:

@@ -46,13 +46,20 @@ const DocumentVisualizer = ({ activeIds = [], onPointClick }) => {
   const fetchInitialClusters = async () => {
     try {
       const res = await api.get('/clusters');
-      if (res.data && res.data.points) {
-        setPoints(res.data.points);
+
+      if (!res.data || !res.data.points) {
+        console.log("❌ No cluster data");
+        return;
       }
+
+      console.log("Cluster data:", res.data.points);
+
+      setPoints(res.data.points); 
     } catch (err) {
       console.error("Initial Fetch Error:", err);
     }
   };
+
   fetchInitialClusters();
 }, []);
 
