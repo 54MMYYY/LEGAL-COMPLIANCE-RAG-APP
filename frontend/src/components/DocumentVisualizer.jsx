@@ -7,6 +7,8 @@ const API_BASE_URL = window.location.hostname === 'localhost'
   ? 'http://127.0.0.1:8000' 
   : 'https://legal-compliance-rag-app.onrender.com';
 
+const api = axios.create({ baseURL: API_BASE_URL });
+
 const DataPoint = ({ position, text, label, color, isActive, onPointClick, source, page }) => {
   const [hovered, setHover] = useState(false);
   const dotColor = color || "#10b981";
@@ -45,12 +47,16 @@ const DocumentVisualizer = ({ activeIds = [], onPointClick }) => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const res = await axios.get('${API_BASE_URL}/clusters');
-        setPoints(res.data.points || []);
-      } catch (err) { console.error(err); }
+        const res = await api.get('/clusters'); 
+        if (res.data && res.data.points) {
+          setPoints(res.data.points);
+        }
+      } catch (err) {
+        console.error("Connection Refused. Check if API_BASE_URL is correct:", err);
+      }
     };
     fetchData();
-  }, [activeIds]); // Refresh when highlights change
+  }, [activeIds]); 
 
   return (
     <div className="w-full h-full bg-slate-950">

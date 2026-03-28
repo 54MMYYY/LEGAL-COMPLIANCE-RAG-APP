@@ -59,34 +59,34 @@ async def get_clusters():
     try:
         data = vectorstore._collection.get(include=['embeddings', 'documents', 'metadatas'])
         
-        if data is None:
-            return {"points": []}
-            
-        embeddings_list = data.get('embeddings')
-        if embeddings_list is None or len(embeddings_list) == 0:
-            print("CLUSTERS: No embeddings found in ChromaDB.")
+        if data is None or 'embeddings' not in data or not data['embeddings']:
             return {"points": []}
 
+        embeddings_list = data['embeddings']
         vecs = np.array([np.array(e).flatten() for e in embeddings_list], dtype=np.float32)
         
-        if vecs.shape[0] < 3:
-            coords_3d = np.array([[float(i) * 8.0, 0.0, float(i) * 4.0] for i in range(vecs.shape[0])])
-        else:
+        n_samples = vecs.shape[0]
+
+        if n_samples >= 3:
             pca = PCA(n_components=3)
             coords_3d = pca.fit_transform(vecs)
+        else:
+            coords_3d = np.array([
+                [float(i) * 10.0, 5.0, float(i) * 5.0] 
+                for i in range(n_samples)
+            ])
         
         points = []
         ids = data.get('ids', [])
         documents = data.get('documents', [])
         metadatas = data.get('metadatas', [])
 
-        for i in range(len(coords_3d)):
+        for i in range(n_samples):
             meta = metadatas[i] if (metadatas and i < len(metadatas)) else {}
-            source_path = str(meta.get('source', 'Unknown'))
-            source_file = os.path.basename(source_path)
+            source_file = os.path.basename(str(meta.get('source', 'Unknown')))
             
             points.append({
-                "id": ids[i] if (ids and i < len(ids)) else f"id_{i}",
+                "id": ids[i] if i < len(ids) else f"id_{i}",
                 "position": (coords_3d[i] * 15).tolist(), 
                 "color": get_consistent_color(source_file), 
                 "source": source_file,
@@ -94,12 +94,11 @@ async def get_clusters():
                 "text": documents[i][:200] if (documents and i < len(documents)) else ""
             })
             
-        print(f"CLUSTERS: Successfully generated {len(points)} points.")
         return {"points": points}
 
     except Exception as e:
-        print(f"CLUSTER CRITICAL ERROR: {str(e)}")
-        return {"points": [], "error": f"Backend Math Error: {str(e)}"}
+        print(f"CLUSTER ERROR: {str(e)}")
+        return {"points": [], "error": str(e)}
 
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
