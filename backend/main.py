@@ -54,28 +54,42 @@ async def root():
 @app.get("/clusters")
 async def get_clusters():
     try:
-        data = vectorstore._collection.get(include=['embeddings', 'documents', 'metadatas'], limit = 10000)
-        vecs = np.array(data['embeddings'])
+        # 1. Force a synchronization check with the DB
+        data = vectorstore._collection.get(include=['embeddings', 'documents', 'metadatas'], limit=10000)
         
+        # 2. Check if we actually have data
+        if not data or not data.get('embeddings') or len(data['embeddings']) == 0:
+            return {"points": []}
+
+        # 3. Ensure embeddings are float arrays (Crucial for the new Gemini model)
+        vecs = np.array(data['embeddings'], dtype=np.float32)
+        
+        # 4. Handle 3D Projection math
         if vecs.shape[0] < 3:
-            coords_3d = np.array([[float(i) * 5.0, 0.0, 0.0] for i in range(vecs.shape[0])])
+            # Create simple linear spread if not enough points for PCA
+            coords_3d = np.array([[float(i) * 2.0, float(i) * 1.0, 0.0] for i in range(vecs.shape[0])])
         else:
             pca = PCA(n_components=3)
             coords_3d = pca.fit_transform(vecs)
         
+        # 5. Build the point objects for the Three.js frontend
         points = []
         for i in range(len(coords_3d)):
-            source_file = os.path.basename(data['metadatas'][i].get('source', ''))
+            metadata = data['metadatas'][i] if data['metadatas'] else {}
+            source_file = os.path.basename(metadata.get('source', 'unknown_doc'))
+            
             points.append({
                 "id": data['ids'][i],
-                "position": (coords_3d[i] * 10).tolist(),
+                "position": (coords_3d[i] * 15).tolist(), # Increased multiplier for better spread
                 "color": get_consistent_color(source_file), 
                 "source": source_file,
-                "page": data['metadatas'][i].get('page', 0),
-                "text": data['documents'][i][:200]
+                "page": int(metadata.get('page', 0)),
+                "text": data['documents'][i][:200] if data['documents'] else ""
             })
+            
         return {"points": points}
     except Exception as e:
+        print(f"CLUSTER ERROR: {str(e)}") # This will show in Render logs
         return {"points": [], "error": str(e)}
 
 @app.post("/upload")
