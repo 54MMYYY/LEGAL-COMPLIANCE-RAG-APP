@@ -13,7 +13,12 @@ const API_BASE_URL = window.location.hostname === 'localhost'
 const api = axios.create({ baseURL: API_BASE_URL });
 
 const App = () => {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([
+  {
+    role: 'assistant',
+    content: 'Welcome to the Legal Compliance RAG App. Upload your legal documents, then ask me anything about them.'
+  }
+]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({ latency: '0ms', sources: 0, cost: '$0.00' });
