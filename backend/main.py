@@ -54,12 +54,25 @@ async def root():
 from sklearn.decomposition import PCA
 import numpy as np
 
+@app.get("/debug")
+async def debug():
+    count = vectorstore._collection.count()
+    peek = vectorstore._collection.peek(5)
+    return {
+        "count": count,
+        "peek_ids": peek.get("ids"),
+        "has_embeddings": peek.get("embeddings") is not None
+    }
+
 @app.get("/clusters")
 async def get_clusters():
     try:
         data = vectorstore._collection.get(
             include=['embeddings', 'documents', 'metadatas']
         )
+        print("DEBUG total IDs:", len(data.get('ids', [])))
+        print("DEBUG embeddings type:", type(data.get('embeddings')))
+        print("DEBUG embeddings value:", data.get('embeddings'))
         embeddings_list = data.get('embeddings', None)
         if embeddings_list is None or len(embeddings_list) == 0:
             return {"points": []}
