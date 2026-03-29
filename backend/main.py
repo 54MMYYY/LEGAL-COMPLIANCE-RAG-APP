@@ -73,10 +73,10 @@ async def get_clusters():
         if n_samples >= 3:
             pca = PCA(n_components=3)
             coords_3d = pca.fit_transform(vecs)
-            coords_3d = coords_3d * 30.0
+            coords_3d = coords_3d * 5.0
         else:
             coords_3d = np.array([
-                [i * 5.0, 2.0, i * -5.0]
+                [i * 3.0, 0.0, i * 3.0]
                 for i in range(n_samples)
             ], dtype=np.float32)
 
