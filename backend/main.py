@@ -83,11 +83,9 @@ async def get_clusters():
         if n_samples >= 3:
             pca = PCA(n_components=3)
             coords_3d = pca.fit_transform(vecs)
-            # Normalize by std deviation so spread is data-independent,
-            # then scale to a comfortable 3D viewing range
             std = np.std(coords_3d, axis=0)
-            std[std < 1e-8] = 1.0  # avoid divide-by-zero on flat axes
-            coords_3d = (coords_3d / std) * 12.0
+            std[std < 1e-8] = 1.0  
+            coords_3d = (coords_3d / std) * 7.5
         else:
             coords_3d = np.array(
                 [[i * 10.0, 5.0, i * 5.0] for i in range(n_samples)],
