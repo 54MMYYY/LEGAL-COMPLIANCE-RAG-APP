@@ -3,7 +3,9 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Sphere, Html, Grid } from '@react-three/drei';
 import axios from 'axios';
 
-const API_BASE_URL = 'https://legal-compliance-rag-app.onrender.com';
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://127.0.0.1:8000' 
+  : 'https://legal-compliance-rag-app.onrender.com';
 
 const api = axios.create({ baseURL: API_BASE_URL });
 
@@ -63,15 +65,23 @@ const DocumentVisualizer = ({ activeIds = [], onPointClick }) => {
   fetchInitialClusters();
 }, []);
 
+  // Inside DocumentVisualizer.jsx
   return (
     <div className="w-full h-full bg-slate-950">
-      <Canvas camera={{ position: [15, 15, 15], fov: 50 }}>
-        <ambientLight intensity={0.8} />
-        <pointLight position={[10, 10, 10]} />
+      {/* 1. Add a key to the Canvas. When points.length changes, 
+            it forces a full re-sync of the 3D scene. */}
+      <Canvas 
+        key={points.length} 
+        camera={{ position: [20, 20, 20], fov: 50 }}
+      >
+        <ambientLight intensity={1.5} />
+        <pointLight position={[10, 10, 10]} intensity={2} />
         <Grid infiniteGrid fadeDistance={50} cellColor="#1e293b" />
-        {points.map((p, i) => (
+        
+        {/* 2. Strict check for points length */}
+        {points && points.length > 0 && points.map((p, i) => (
           <DataPoint 
-            key={p.id || i} 
+            key={p.id || `point-${i}`} 
             position={p.position} 
             text={p.text} 
             label={p.source} 

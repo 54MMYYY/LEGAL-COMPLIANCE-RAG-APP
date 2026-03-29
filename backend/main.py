@@ -73,12 +73,9 @@ async def get_clusters():
         if n_samples >= 3:
             pca = PCA(n_components=3)
             coords_3d = pca.fit_transform(vecs)
-            coords_3d = coords_3d * 5.0
+            coords_3d = (coords_3d * 15.0).tolist()
         else:
-            coords_3d = np.array([
-                [i * 3.0, 0.0, i * 3.0]
-                for i in range(n_samples)
-            ], dtype=np.float32)
+            coords_3d = [[float(i * 10), 0.0, float(i * -10)] for i in range(n_samples)]
 
         points = []
         ids = data.get('ids', [])
