@@ -41,35 +41,35 @@ const DataPoint = ({ position, text, label, color, isActive, onPointClick, sourc
   );
 };
 
-const DocumentVisualizer = ({ activeIds = [], onPointClick }) => {
+const DocumentVisualizer = ({ activeIds = [], onPointClick, fileCount = 0 }) => {
   const [points, setPoints] = useState([]);
 
-  useEffect(() => {
-  const fetchInitialClusters = async () => {
+  const fetchClusters = async () => {
     try {
       const res = await api.get('/clusters');
-
-      if (!res.data || !res.data.points) {
-        console.log("No cluster data");
-        return;
+      if (res.data?.points?.length > 0) {
+        setPoints(res.data.points);
       }
-
-      console.log("Cluster data:", res.data.points);
-
-      setPoints(res.data.points); 
     } catch (err) {
-      console.error("Initial Fetch Error:", err);
+      console.error("Cluster fetch error:", err);
     }
   };
 
-  fetchInitialClusters();
-}, []);
+  // Re-fetch whenever the file list changes (upload or delete)
+  useEffect(() => {
+    fetchClusters();
+  }, [fileCount]);
 
-  // Inside DocumentVisualizer.jsx
+  // Also poll every 5s as a safety net for cold starts
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchClusters();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="w-full h-full bg-slate-950">
-      {/* 1. Add a key to the Canvas. When points.length changes, 
-            it forces a full re-sync of the 3D scene. */}
       <Canvas 
         camera={{ position: [20, 20, 20], fov: 50 }}
       >
@@ -77,7 +77,6 @@ const DocumentVisualizer = ({ activeIds = [], onPointClick }) => {
         <pointLight position={[10, 10, 10]} intensity={2} />
         <Grid infiniteGrid fadeDistance={50} cellColor="#1e293b" />
         
-        {/* 2. Strict check for points length */}
         {points && points.length > 0 && points.map((p, i) => (
           <DataPoint 
             key={p.id || `point-${i}`} 

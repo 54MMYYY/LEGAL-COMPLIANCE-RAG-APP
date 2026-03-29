@@ -212,6 +212,7 @@ const App = () => {
                 <DocumentVisualizer 
                     activeIds={activeIds} 
                     onPointClick={openPdfAtPage} 
+                    fileCount={files.length}
                 />
             )}
         </div>
