@@ -60,22 +60,26 @@ async def get_clusters():
         data = vectorstore._collection.get(
             include=['embeddings', 'documents', 'metadatas']
         )
-
         embeddings_list = data.get('embeddings', None)
-
         if embeddings_list is None or len(embeddings_list) == 0:
             return {"points": []}
 
         vecs = np.array([np.array(e).flatten() for e in embeddings_list], dtype=np.float32)
-
         n_samples = vecs.shape[0]
 
         if n_samples >= 3:
             pca = PCA(n_components=3)
             coords_3d = pca.fit_transform(vecs)
-            coords_3d = (coords_3d * 15.0).tolist()
+            # Normalize by std deviation so spread is data-independent,
+            # then scale to a comfortable 3D viewing range
+            std = np.std(coords_3d, axis=0)
+            std[std < 1e-8] = 1.0  # avoid divide-by-zero on flat axes
+            coords_3d = (coords_3d / std) * 12.0
         else:
-            coords_3d = [[float(i * 10), 0.0, float(i * -10)] for i in range(n_samples)]
+            coords_3d = np.array(
+                [[i * 10.0, 5.0, i * 5.0] for i in range(n_samples)],
+                dtype=np.float32
+            )
 
         points = []
         ids = data.get('ids', [])
@@ -84,9 +88,7 @@ async def get_clusters():
 
         for i in range(n_samples):
             meta = metadatas[i] if i < len(metadatas) else {}
-
             source_file = os.path.basename(str(meta.get('source', 'Unknown')))
-
             points.append({
                 "id": ids[i] if i < len(ids) else f"id_{i}",
                 "position": coords_3d[i].tolist(),

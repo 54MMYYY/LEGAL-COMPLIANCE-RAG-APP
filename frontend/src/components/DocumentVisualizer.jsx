@@ -71,7 +71,6 @@ const DocumentVisualizer = ({ activeIds = [], onPointClick }) => {
       {/* 1. Add a key to the Canvas. When points.length changes, 
             it forces a full re-sync of the 3D scene. */}
       <Canvas 
-        key={points.length} 
         camera={{ position: [20, 20, 20], fov: 50 }}
       >
         <ambientLight intensity={1.5} />
