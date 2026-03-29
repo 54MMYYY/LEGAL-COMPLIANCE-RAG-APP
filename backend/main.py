@@ -85,7 +85,7 @@ async def get_clusters():
             coords_3d = pca.fit_transform(vecs)
             std = np.std(coords_3d, axis=0)
             std[std < 1e-8] = 1.0  
-            coords_3d = (coords_3d / std) * 7.5
+            coords_3d = (coords_3d / std) * 3.0
         else:
             coords_3d = np.array(
                 [[i * 10.0, 5.0, i * 5.0] for i in range(n_samples)],

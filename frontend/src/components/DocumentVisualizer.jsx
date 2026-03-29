@@ -47,9 +47,7 @@ const DocumentVisualizer = ({ activeIds = [], onPointClick, fileCount = 0 }) => 
   const fetchClusters = async () => {
     try {
       const res = await api.get('/clusters');
-      if (res.data?.points?.length > 0) {
-        setPoints(res.data.points);
-      }
+      setPoints(res.data?.points ?? []);
     } catch (err) {
       console.error("Cluster fetch error:", err);
     }
