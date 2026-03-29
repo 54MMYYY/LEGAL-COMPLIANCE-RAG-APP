@@ -263,7 +263,7 @@ const App = () => {
             />
             <button 
               type="submit" 
-              className="bg-blue-600 p-3 rounded-xl hover:bg-blue-500 transition-all shrink-0 h-[46px]"
+              className="bg-blue-600 p-3 rounded-xl hover:bg-blue-500 transition-all shrink-0 h-[46px] cursor-pointer disabled:cursor-not-allowed disabled:bg-blue-400 flex items-center justify-center"
             >
               <Send size={20} />
             </button>
