@@ -48,7 +48,7 @@ const DocumentVisualizer = ({ activeIds = [], onPointClick }) => {
       const res = await api.get('/clusters');
 
       if (!res.data || !res.data.points) {
-        console.log("❌ No cluster data");
+        console.log("No cluster data");
         return;
       }
 
