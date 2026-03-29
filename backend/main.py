@@ -139,12 +139,16 @@ async def upload_file(file: UploadFile = File(...)):
 
 @app.get("/files")
 async def list_files():
-    # Returns the list of files in data folder to the sidebar
-    if not os.path.exists(DATA_DIR):
+    try:
+        data = vectorstore._collection.get(include=['metadatas'])
+        sources = set()
+        for meta in data.get('metadatas', []):
+            source = meta.get('source', '')
+            if source:
+                sources.add(os.path.basename(source))
+        return [{"name": f, "color": get_consistent_color(f)} for f in sorted(sources)]
+    except Exception as e:
         return []
-    files = [f for f in os.listdir(DATA_DIR) if f.endswith('.pdf')]
-    # Return a list of objects instead of just strings
-    return [{"name": f, "color": get_consistent_color(f)} for f in files]
 
 @app.get("/files/{filename}")
 async def get_file(filename: str):
@@ -156,18 +160,24 @@ async def get_file(filename: str):
 @app.delete("/delete/{filename}")
 async def delete_file(filename: str):
     try:
+        # Get all IDs where source contains the filename
+        data = vectorstore._collection.get(include=['metadatas'])
+        ids_to_delete = [
+            data['ids'][i] 
+            for i, meta in enumerate(data.get('metadatas', []))
+            if os.path.basename(meta.get('source', '')) == filename
+        ]
+        if ids_to_delete:
+            vectorstore._collection.delete(ids=ids_to_delete)
+
+        # Delete physical file if it exists
         file_path = os.path.join(DATA_DIR, filename)
         if os.path.exists(file_path):
             os.remove(file_path)
 
-        # Force delete from Chroma using the metadata source tag
-        # We use the full path usually stored by PyPDFLoader
-        vectorstore.delete(where={"source": file_path})
-        
-        # Also clear the color cache for that file to keep RAM clean
         if filename in file_color_cache:
             del file_color_cache[filename]
-            
+
         return {"status": "success", "message": f"Deleted {filename}"}
     except Exception as e:
         print(f"DELETE ERROR: {e}")
