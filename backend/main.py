@@ -204,6 +204,10 @@ async def chat_endpoint(request: dict):
         ans_text = response.text
         latency = f"{round((time.time() - start_time), 2)}s"
 
+        input_tokens = response.usage_metadata.prompt_token_count
+        output_tokens = response.usage_metadata.candidates_token_count
+        precise_cost = (input_tokens / 1000000) * 0.075 + (output_tokens / 1000000) * 0.3
+
         # Filter sources if response is generic
         if is_generic_response(ans_text):
             return {"answer": ans_text, "source_ids": [], "metadata": [], "latency": latency}
@@ -224,7 +228,8 @@ async def chat_endpoint(request: dict):
             "answer": ans_text,
             "source_ids": [doc.metadata.get('id', '') for doc in docs], # Mapping IDs from docs
             "metadata": sources,
-            "latency": latency
+            "latency": latency,
+            "cost": precise_cost
         }
     except Exception as e:
         return {"answer": f"Backend Error: {str(e)}", "source_ids": [], "metadata": []}

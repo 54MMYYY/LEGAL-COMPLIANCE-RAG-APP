@@ -127,7 +127,7 @@ const App = () => {
     setStats({
       latency: res.data.latency,
       sources: res.data.metadata.length,
-      cost: "$0.00" 
+      cost: res.data.cost 
     });
     setMessages(prev => [...prev, { 
       role: 'assistant', 
@@ -197,7 +197,7 @@ const App = () => {
           <div className="space-y-3">
             <Metric icon={<Clock size={14}/>} label="Latency" value={stats.latency} />
             <Metric icon={<Database size={14}/>} label="Retrieved Chunks" value={stats.sources} />
-            <Metric icon={<Activity size={14}/>} label="Est. Cost" value={stats.cost} />
+            <Metric icon={<Activity size={14}/>} label="Est. Cost" value={typeof stats.cost === 'number' ? `$${stats.cost.toFixed(8)}` : stats.cost} />
           </div>
         </div>
       </div>
